@@ -77,7 +77,7 @@ class DiscordBot(commands.Bot):
         """Handles both proactive responses and agent requests"""
 
         try:
-            # 🔥 PROACTIVE LAYER
+            #  PROACTIVE LAYER
             if "proactive_type" in triage_result:
                 proactive_type = triage_result["proactive_type"]
 
@@ -92,7 +92,8 @@ class DiscordBot(commands.Bot):
                 if proactive_type == "onboarding":
                     await message.channel.send(
                         f"Awesome {message.author.mention}! 🎉\n"
-                        "Here’s how you can start:\n"
+                        "Here's how you can start:\n"
+
                         "1️⃣ Look for `good first issue`\n"
                         "2️⃣ Set up the project locally\n"
                         "3️⃣ Read CONTRIBUTING.md\n\n"
@@ -111,7 +112,7 @@ class DiscordBot(commands.Bot):
                 if proactive_type == "acknowledgment":
                     return
 
-            # 🔥 NORMAL AGENT FLOW (Fallback)
+            # NORMAL AGENT FLOW (Fallback)
 
             user_id = str(message.author.id)
             thread_id = await self._get_or_create_thread(message, user_id)

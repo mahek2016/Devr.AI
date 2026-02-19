@@ -18,7 +18,7 @@ class ClassificationRouter:
             google_api_key=settings.gemini_api_key
         )
 
-    # 🔥 NEW: Proactive lightweight pattern detection
+    #  NEW: Proactive lightweight pattern detection
     def _simple_pattern_match(self, message: str):
         """
         Lightweight proactive detection before calling LLM.
@@ -61,7 +61,7 @@ class ClassificationRouter:
 
         if any(t in msg for t in thanks):
             return {
-                "needs_devrel": False,
+                "needs_devrel": True,
                 "priority": "low",
                 "reasoning": "Acknowledgment message - no processing needed",
                 "original_message": message,
@@ -78,13 +78,13 @@ class ClassificationRouter:
         """Simple triage: Does this message need DevRel assistance?"""
 
         try:
-            # 🔥 Step 1: Lightweight proactive pattern check
+            #  Step 1: Lightweight proactive pattern check
             pattern_result = self._simple_pattern_match(message)
             if pattern_result:
                 logger.info("Pattern-based proactive classification triggered")
                 return pattern_result
 
-            # 🔥 Step 2: Fallback to LLM
+            #  Step 2: Fallback to LLM
             triage_prompt = DEVREL_TRIAGE_PROMPT.format(
                 message=message,
                 context=context or "No additional context"
