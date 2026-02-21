@@ -1,4 +1,4 @@
-from services.github.issue_suggestion_service import IssueSuggestionService
+from app.services.github.issue_suggestion_service import IssueSuggestionService
 import logging
 import config
 from typing import Dict, Any
@@ -121,8 +121,8 @@ class GitHubToolkit:
                 service = IssueSuggestionService(settings.github_token)
 
                 # ✅ FIXED — passing query argument
-                issues = await service.fetch_global_beginner_issues(query)
-
+                issues = await service.fetch_beginner_issues(language="python")
+                
                 if not issues:
                     result = {
                         "status": "success",

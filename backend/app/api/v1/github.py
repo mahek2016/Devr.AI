@@ -1,13 +1,13 @@
 from fastapi import APIRouter, HTTPException
-from services.github.issue_suggestion_service import IssueSuggestionService
+from app.services.github.issue_suggestion_service import IssueSuggestionService
 from config import GITHUB_TOKEN
+from app.core.config import settings
 
 router = APIRouter()
 
-issue_service = IssueSuggestionService(GITHUB_TOKEN)
+issue_service = IssueSuggestionService(settings.github_token)
 
-
-@router.get("/github/beginner-issues")
+@router.get("/beginner-issues")
 async def get_beginner_issues(
     language: str = "python",
     limit: int = 5

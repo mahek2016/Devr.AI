@@ -1,5 +1,6 @@
-from services.github.issue_suggestion_service import IssueSuggestionService
+from app.services.github.issue_suggestion_service import IssueSuggestionService
 from config import GITHUB_TOKEN
+from app.core.config import settings
 
 import uuid
 import logging
@@ -12,13 +13,10 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-logging.basicConfig(level=logging.INFO)
-
 handler_registry = HandlerRegistry()
 event_bus = EventBus(handler_registry)
 
-issue_service = IssueSuggestionService(GITHUB_TOKEN)
-
+issue_service = IssueSuggestionService(settings.github_token)
 
 class RepoRequest(BaseModel):
     repo_url: str
