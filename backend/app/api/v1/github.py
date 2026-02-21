@@ -1,14 +1,21 @@
 from fastapi import APIRouter, HTTPException
 from services.github.issue_suggestion_service import IssueSuggestionService
-from config import GITHUB_TOKEN, GITHUB_ORG
+from config import GITHUB_TOKEN
 
 router = APIRouter()
 
 issue_service = IssueSuggestionService(GITHUB_TOKEN)
 
 
-@router.get("/beginner-issues")
-async def get_beginner_issues(repo: str):
+@router.get("/github/beginner-issues")
+async def get_beginner_issues(
+    language: str = "python",
+    limit: int = 5
+):
+    """
+    Fetch global beginner-friendly GitHub issues.
+    """
+
     if not GITHUB_TOKEN:
         raise HTTPException(
             status_code=500,
@@ -17,12 +24,12 @@ async def get_beginner_issues(repo: str):
 
     try:
         issues = await issue_service.fetch_beginner_issues(
-            owner=GITHUB_ORG,
-            repo=repo
+            language=language,
+            limit=limit
         )
 
         return {
-            "repo": repo,
+            "language": language,
             "count": len(issues),
             "issues": issues
         }
@@ -30,5 +37,5 @@ async def get_beginner_issues(repo: str):
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to fetch issues: {str(e)}"
-        )
+            detail="Failed to fetch beginner issues"
+        ) from e

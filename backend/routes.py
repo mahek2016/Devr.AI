@@ -122,7 +122,7 @@ async def github_webhook(request: Request):
 # Beginner Issues Endpoint (FIXED)
 # ---------------------------------------------------------
 
-@router.get("/github/beginner-issues")
+@router.get("/beginner-issues")
 async def get_beginner_issues(
     language: str = "python",
     limit: int = 5

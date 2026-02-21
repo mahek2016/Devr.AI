@@ -1,5 +1,4 @@
-from .services.issue_suggestion_service import IssueSuggestionService
-
+from services.github.issue_suggestion_service import IssueSuggestionService
 import logging
 import config
 from typing import Dict, Any

@@ -14,7 +14,7 @@ class IssueSuggestionService:
         limit: int = 5
     ) -> List[Dict]:
         """
-        Fetch beginner-friendly (good first issue) GitHub issues globally
+        Fetch global beginner-friendly GitHub issues
         filtered by programming language.
         """
 
@@ -23,7 +23,11 @@ class IssueSuggestionService:
             "Accept": "application/vnd.github+json"
         }
 
-        query = f'label:"good first issue" language:{language} state:open'
+        # Basic validation (prevents query injection tricks)
+        if not language or not language.isalnum():
+            language = "python"
+
+        search_query = f'label:"good first issue" is:issue state:open language:{language}'
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -31,7 +35,7 @@ class IssueSuggestionService:
                     f"{GITHUB_API_BASE}/search/issues",
                     headers=headers,
                     params={
-                        "q": query,
+                        "q": search_query,
                         "per_page": limit
                     }
                 )
@@ -41,18 +45,16 @@ class IssueSuggestionService:
 
                 data = response.json()
 
-            items = data.get("items", [])
-
             return [
                 {
-                    "number": issue.get("number"),
-                    "title": issue.get("title"),
-                    "url": issue.get("html_url"),
-                    "repo": issue.get("repository_url", "").split("/")[-1]
+                    "number": item.get("number"),
+                    "title": item.get("title"),
+                    "url": item.get("html_url"),
+                    "repo": item.get("repository_url", "").split("/")[-1]
                 }
-                for issue in items
+                for item in data.get("items", [])
             ]
 
         except Exception:
-            # Fail gracefully — do not crash API
+            # Fail gracefully
             return []
