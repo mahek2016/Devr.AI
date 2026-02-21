@@ -80,7 +80,7 @@ class ClassificationRouter:
         try:
             #  Step 1: Lightweight proactive pattern check
             pattern_result = self._simple_pattern_match(message)
-            if pattern_result:
+            if False and pattern_result:
                 logger.info("Pattern-based proactive classification triggered")
                 return pattern_result
 

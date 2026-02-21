@@ -1,17 +1,21 @@
 import discord
 from discord.ext import commands
 import logging
-from typing import Dict, Any, Optional
-from app.core.orchestration.queue_manager import AsyncQueueManager, QueuePriority
-from app.classification.classification_router import ClassificationRouter
+from typing import Dict, Optional
+
+from app.agents.devrel.github.github_toolkit import GitHubToolkit
 
 logger = logging.getLogger(__name__)
 
 
 class DiscordBot(commands.Bot):
-    """Discord bot with LangGraph agent integration"""
+    """
+    DEV MODE Discord Bot
+    Direct GitHubToolkit execution
+    No Queue, No Agent, No Gemini
+    """
 
-    def __init__(self, queue_manager: AsyncQueueManager, **kwargs):
+    def __init__(self, **kwargs):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.guilds = True
@@ -25,20 +29,10 @@ class DiscordBot(commands.Bot):
             **kwargs
         )
 
-        self.queue_manager = queue_manager
-        self.classifier = ClassificationRouter()
         self.active_threads: Dict[str, str] = {}
-        self._register_queue_handlers()
-
-    def _register_queue_handlers(self):
-        """Register handlers for queue messages"""
-        self.queue_manager.register_handler(
-            "discord_response",
-            self._handle_agent_response
-        )
 
     async def on_ready(self):
-        logger.info(f'Enhanced Discord bot logged in as {self.user}')
+        logger.info(f'Bot logged in as {self.user}')
         print(f'Bot is ready! Logged in as {self.user}')
         try:
             synced = await self.tree.sync()
@@ -54,117 +48,32 @@ class DiscordBot(commands.Bot):
             return
 
         try:
-            triage_result = await self.classifier.should_process_message(
-                message.content,
-                {
-                    "channel_id": str(message.channel.id),
-                    "user_id": str(message.author.id),
-                    "guild_id": str(message.guild.id) if message.guild else None
-                }
-            )
-
-            if triage_result.get("needs_devrel", False):
-                await self._handle_devrel_message(message, triage_result)
-
-        except Exception as e:
-            logger.error(f"Error processing message: {str(e)}")
-
-    async def _handle_devrel_message(
-        self,
-        message,
-        triage_result: Dict[str, Any]
-    ):
-        """Handles both proactive responses and agent requests"""
-
-        try:
-            #  PROACTIVE LAYER
-            if "proactive_type" in triage_result:
-                proactive_type = triage_result["proactive_type"]
-
-                if proactive_type == "greeting":
-                    await message.channel.send(
-                        f"Hi {message.author.mention}! 👋\n"
-                        "Welcome to the community!\n"
-                        "If you're new, I can guide you on how to start contributing 🚀"
-                    )
-                    return
-
-                if proactive_type == "onboarding":
-                    await message.channel.send(
-                        f"Awesome {message.author.mention}! 🎉\n"
-                        "Here's how you can start:\n"
-
-                        "1️⃣ Look for `good first issue`\n"
-                        "2️⃣ Set up the project locally\n"
-                        "3️⃣ Read CONTRIBUTING.md\n\n"
-                        "Would you like me to suggest beginner-friendly issues?"
-                    )
-                    return
-
-                if proactive_type == "issue_suggestion":
-                    await message.channel.send(
-                        f"{message.author.mention} 🔍\n"
-                        "You can check open issues labeled `good first issue`.\n"
-                        "Would you like me to fetch some right now?"
-                    )
-                    return
-
-                if proactive_type == "acknowledgment":
-                    return
-
-            # NORMAL AGENT FLOW (Fallback)
-
             user_id = str(message.author.id)
             thread_id = await self._get_or_create_thread(message, user_id)
 
-            agent_message = {
-                "type": "devrel_request",
-                "id": f"discord_{message.id}",
-                "user_id": user_id,
-                "channel_id": str(message.channel.id),
-                "thread_id": thread_id,
-                "memory_thread_id": user_id,
-                "content": message.content,
-                "triage": triage_result,
-                "classification": triage_result,
-                "platform": "discord",
-                "timestamp": message.created_at.isoformat(),
-                "author": {
-                    "username": message.author.name,
-                    "display_name": message.author.display_name,
-                    "avatar_url": str(message.author.avatar.url)
-                    if message.author.avatar else None
-                }
-            }
+            thread = self.get_channel(int(thread_id))
+            if thread:
+                await thread.send("Processing your request...")
 
-            priority_map = {
-                "high": QueuePriority.HIGH,
-                "medium": QueuePriority.MEDIUM,
-                "low": QueuePriority.LOW
-            }
+            # 🔥 Direct Toolkit Execution
+            toolkit = GitHubToolkit()
+            result = await toolkit.execute(message.content)
 
-            priority = priority_map.get(
-                triage_result.get("priority"),
-                QueuePriority.MEDIUM
-            )
+            response_text = result.get("message", "No response generated.")
 
-            await self.queue_manager.enqueue(agent_message, priority)
-
-            if thread_id:
-                thread = self.get_channel(int(thread_id))
-                if thread:
-                    await thread.send(
-                        "I'm processing your request, please hold on..."
-                    )
+            if thread:
+                for i in range(0, len(response_text), 2000):
+                    await thread.send(response_text[i:i+2000])
 
         except Exception as e:
-            logger.error(f"Error handling DevRel message: {str(e)}")
+            logger.error(f"Error processing message: {str(e)}")
 
     async def _get_or_create_thread(
         self,
         message,
         user_id: str
     ) -> Optional[str]:
+
         try:
             if user_id in self.active_threads:
                 thread_id = self.active_threads[user_id]
@@ -191,26 +100,3 @@ class DiscordBot(commands.Bot):
             logger.error(f"Failed to create thread: {e}")
 
         return str(message.channel.id)
-
-    async def _handle_agent_response(
-        self,
-        response_data: Dict[str, Any]
-    ):
-        try:
-            thread_id = response_data.get("thread_id")
-            response_text = response_data.get("response", "")
-
-            if not thread_id or not response_text:
-                return
-
-            thread = self.get_channel(int(thread_id))
-            if thread:
-                for i in range(0, len(response_text), 2000):
-                    await thread.send(response_text[i:i+2000])
-            else:
-                logger.error(
-                    f"Thread {thread_id} not found for agent response"
-                )
-
-        except Exception as e:
-            logger.error(f"Error handling agent response: {str(e)}")
