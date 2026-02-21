@@ -8,11 +8,15 @@ class IssueSuggestionService:
     def __init__(self, token: str):
         self.token = token
 
-    async def fetch_global_beginner_issues(
+    async def fetch_beginner_issues(
         self,
         language: str = "python",
         limit: int = 5
     ) -> List[Dict]:
+        """
+        Fetch beginner-friendly (good first issue) GitHub issues globally
+        filtered by programming language.
+        """
 
         headers = {
             "Authorization": f"Bearer {self.token}",
@@ -20,27 +24,35 @@ class IssueSuggestionService:
         }
 
         query = f'label:"good first issue" language:{language} state:open'
-        url = f"{GITHUB_API_BASE}/search/issues?q={query}&per_page={limit}"
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, headers=headers)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{GITHUB_API_BASE}/search/issues",
+                    headers=headers,
+                    params={
+                        "q": query,
+                        "per_page": limit
+                    }
+                )
 
-            if response.status_code != 200:
-                print("GitHub search failed:", response.text)
-                return []
+                if response.status_code != 200:
+                    return []
 
-            data = response.json()
+                data = response.json()
 
-        items = data.get("items", [])
+            items = data.get("items", [])
 
-        results = []
+            return [
+                {
+                    "number": issue.get("number"),
+                    "title": issue.get("title"),
+                    "url": issue.get("html_url"),
+                    "repo": issue.get("repository_url", "").split("/")[-1]
+                }
+                for issue in items
+            ]
 
-        for issue in items:
-            results.append({
-                "number": issue["number"],
-                "title": issue["title"],
-                "url": issue["html_url"],
-                "repo": issue["repository_url"].split("/")[-1]
-            })
-
-        return results
+        except Exception:
+            # Fail gracefully — do not crash API
+            return []
