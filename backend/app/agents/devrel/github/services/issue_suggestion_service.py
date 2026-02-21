@@ -33,31 +33,32 @@ class IssueSuggestionService:
         if "django" in query_lower:
             search_query += " org:django"
 
-        url = f"{GITHUB_API_BASE}/search/issues?q={search_query}&per_page={limit}"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{GITHUB_API_BASE}/search/issues",
+                    headers=headers,
+                    params={
+                        "q": search_query,
+                        "per_page": limit
+                    }
+                )
 
-        print("🔍 GitHub Search Query:", search_query)
-        print("🔗 GitHub URL:", url)
+                if response.status_code != 200:
+                    return []
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, headers=headers)
+                data = response.json()
 
-            if response.status_code != 200:
-                print("❌ GitHub API Error:", response.status_code)
-                print("❌ Response Body:", response.text)
-                return []
+            return [
+                {
+                    "repo": item.get("repository_url", "").split("/")[-1],
+                    "number": item.get("number"),
+                    "title": item.get("title"),
+                    "url": item.get("html_url")
+                }
+                for item in data.get("items", [])
+            ]
 
-            data = response.json()
-
-        results = []
-
-        for item in data.get("items", []):
-            results.append({
-                "repo": item["repository_url"].split("/")[-1],
-                "number": item["number"],
-                "title": item["title"],
-                "url": item["html_url"]
-            })
-
-        print(f"✅ Found {len(results)} issues")
-
-        return results
+        except Exception:
+            # Fail gracefully
+            return []
