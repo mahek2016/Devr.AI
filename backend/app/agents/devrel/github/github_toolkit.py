@@ -113,16 +113,18 @@ class GitHubToolkit:
                 }
 
             # -----------------------------------------
-            # BEGINNER ISSUE SEARCH (FIXED)
+            # BEGINNER ISSUE SEARCH
             # -----------------------------------------
 
             elif classification == "find_good_first_issues":
 
-                service = IssueSuggestionService(settings.github_token)
+                service = IssueSuggestionService(settings.github_token_resolved)
 
-                # ✅ FIXED — passing query argument
-                issues = await service.fetch_beginner_issues(language="python")
-                
+                issues = await service.fetch_beginner_issues(
+                    language="python",
+                    limit=10
+                )
+
                 if not issues:
                     result = {
                         "status": "success",

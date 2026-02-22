@@ -1,11 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from app.services.github.issue_suggestion_service import IssueSuggestionService
-from config import GITHUB_TOKEN
 from app.core.config import settings
 
 router = APIRouter()
 
-issue_service = IssueSuggestionService(settings.github_token)
 
 @router.get("/beginner-issues")
 async def get_beginner_issues(
@@ -16,11 +14,15 @@ async def get_beginner_issues(
     Fetch global beginner-friendly GitHub issues.
     """
 
-    if not GITHUB_TOKEN:
+    token = settings.github_token_resolved
+
+    if not token:
         raise HTTPException(
             status_code=500,
             detail="GitHub token not configured"
         )
+
+    issue_service = IssueSuggestionService(token)
 
     try:
         issues = await issue_service.fetch_beginner_issues(
