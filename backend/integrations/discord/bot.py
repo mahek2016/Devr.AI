@@ -1,8 +1,11 @@
 import discord
 from discord.ext import commands
 import logging
+import os
+import asyncio
 from typing import Dict, Optional
 
+from rate_limiter import DiscordRateLimiter
 from app.agents.devrel.github.github_toolkit import GitHubToolkit
 
 logger = logging.getLogger(__name__)
@@ -12,7 +15,7 @@ class DiscordBot(commands.Bot):
     """
     DEV MODE Discord Bot
     Direct GitHubToolkit execution
-    No Queue, No Agent, No Gemini
+    Per-channel rate limiting + simple queue (Lock-based)
     """
 
     def __init__(self, **kwargs):
@@ -30,6 +33,18 @@ class DiscordBot(commands.Bot):
         )
 
         self.active_threads: Dict[str, str] = {}
+        self.channel_locks: Dict[str, asyncio.Lock] = {}
+
+        # Redis-enabled per-channel rate limiter
+        self.rate_limiter = DiscordRateLimiter(
+            redis_url=os.getenv("REDIS_URL"),
+            max_retries=3
+        )
+
+    def _get_channel_lock(self, channel_id: str) -> asyncio.Lock:
+        if channel_id not in self.channel_locks:
+            self.channel_locks[channel_id] = asyncio.Lock()
+        return self.channel_locks[channel_id]
 
     async def on_ready(self):
         logger.info(f'Bot logged in as {self.user}')
@@ -50,20 +65,35 @@ class DiscordBot(commands.Bot):
         try:
             user_id = str(message.author.id)
             thread_id = await self._get_or_create_thread(message, user_id)
-
             thread = self.get_channel(int(thread_id))
-            if thread:
-                await thread.send("Processing your request...")
 
-            # 🔥 Direct Toolkit Execution
-            toolkit = GitHubToolkit()
-            result = await toolkit.execute(message.content)
+            if not thread:
+                return
 
-            response_text = result.get("message", "No response generated.")
+            channel_id = str(thread.id)
+            lock = self._get_channel_lock(channel_id)
 
-            if thread:
+            async with lock:
+
+                # Send processing message
+                await self.rate_limiter.execute_with_retry(
+                    thread.send,
+                    channel_id,
+                    "Processing your request..."
+                )
+
+                # Execute toolkit
+                toolkit = GitHubToolkit()
+                result = await toolkit.execute(message.content)
+                response_text = result.get("message", "No response generated.")
+
+                # Send response in chunks
                 for i in range(0, len(response_text), 2000):
-                    await thread.send(response_text[i:i+2000])
+                    await self.rate_limiter.execute_with_retry(
+                        thread.send,
+                        channel_id,
+                        response_text[i:i+2000]
+                    )
 
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")
@@ -89,11 +119,20 @@ class DiscordBot(commands.Bot):
                     name=thread_name,
                     auto_archive_duration=60
                 )
+
                 self.active_threads[user_id] = str(thread.id)
-                await thread.send(
-                    f"Hello {message.author.mention}! "
-                    "I've created this thread to help you."
-                )
+
+                channel_id = str(thread.id)
+                lock = self._get_channel_lock(channel_id)
+
+                async with lock:
+                    await self.rate_limiter.execute_with_retry(
+                        thread.send,
+                        channel_id,
+                        f"Hello {message.author.mention}! "
+                        "I've created this thread to help you."
+                    )
+
                 return str(thread.id)
 
         except Exception as e:
